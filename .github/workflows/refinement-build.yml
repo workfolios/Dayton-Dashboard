@@ -1,19 +1,15 @@
-name: Temporary Dayton Refinement Build
+name: Temporary Dayton Refinement Validation
 
 on:
-  push:
-    branches:
-      - agent/dayton-refinement-2026-08-19
   pull_request:
     branches:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  refine:
-    if: ${{ github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[refinement-build]') }}
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Check out audited branch
@@ -22,39 +18,213 @@ jobs:
           ref: agent/dayton-refinement-2026-08-19
           fetch-depth: 0
 
-      - name: Apply authorized HTML refinements
-        run: python3 scripts/apply-refinement.py
-
-      - name: Generate deterministic Tailwind CSS
-        run: |
-          printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > /tmp/dayton-tailwind.css
-          npx --yes tailwindcss@3.4.17 -i /tmp/dayton-tailwind.css -o tailwind.css --minify --content ./index.html,./refinement.js
-
-      - name: Validate generated source
+      - name: Validate source and production artifact
         run: |
           python3 - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
-          HTMLParser().feed(Path('index.html').read_text(encoding='utf-8'))
-          print('HTML parse: pass')
+          html = Path('index.html').read_text(encoding='utf-8')
+          HTMLParser().feed(html)
+          assert 'cdn.tailwindcss.com' not in html
+          assert 'chart.js@4.5.1/dist/chart.umd.min.js' in html
+          assert 'lucide@1.28.0' in html
+          assert html.count('preload="metadata"') == 6
+          assert 'class="skip-link"' in html
+          assert 'prefers-reduced-motion' in Path('refinement.css').read_text(encoding='utf-8')
+          css = Path('tailwind.css').read_text(encoding='utf-8')
+          assert 'tailwindcss v3.4.17' in css
+          media = [
+              'Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp3',
+              'Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp4',
+              'North Star Commissary - Bankable CoWorking Model.mp3',
+              'North Star Commissary - Bankable CoWorking Model.mp4',
+              'North Star Commissary - Food Coworking Model.mp3',
+              'North Star Commissary - Food Coworking Model.mp4',
+          ]
+          for name in media:
+              p = Path(name)
+              assert p.is_file() and p.stat().st_size > 1_000_000, name
+          assert not Path('0022-from-the-hip-photo-1_orig.jpg').exists()
+          assert not Path('pirate-chef-final-trans-color-rgb-hr.png').exists()
+          print('Source/artifact validation: pass')
           PY
           node --check refinement.js
-          test -s tailwind.css
-          grep -q 'class="skip-link"' index.html
-          grep -q 'preload="metadata"' index.html
-          grep -q 'prefers-reduced-motion' refinement.css
-          grep -q 'chart.js@4.5.1' index.html
-          grep -q 'lucide@1.28.0' index.html
-          ! grep -q 'cdn.tailwindcss.com' index.html
 
-      - name: Commit deterministic implementation artifact
+      - name: Install Playwright browser engines
         run: |
-          if git diff --quiet -- index.html tailwind.css; then
-            echo 'No generated changes to commit.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html tailwind.css
-          git commit -m 'Implement Dayton refinement [refinement-build]'
-          git push origin HEAD:agent/dayton-refinement-2026-08-19
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run responsive interaction and accessibility smoke
+        run: |
+          mkdir -p qa
+          python3 -m http.server 4173 > /tmp/dayton-http.log 2>&1 &
+          echo $! > /tmp/dayton-http.pid
+          cat > /tmp/dayton-validate.mjs <<'JS'
+          import { chromium, firefox, webkit } from 'playwright';
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+
+          const baseURL = 'http://127.0.0.1:4173/';
+          const knownMissing = ['0022-from-the-hip-photo-1_orig.jpg', 'pirate-chef-final-trans-color-rgb-hr.png'];
+          const mediaPattern = /\.(mp3|mp4)(?:\?|$)/i;
+          const engines = { chromium, firefox, webkit };
+          const viewportSets = {
+            chromium: [
+              { name: 'small-mobile', width: 375, height: 812, touch: true },
+              { name: 'large-mobile', width: 430, height: 932, touch: true },
+              { name: 'tablet', width: 768, height: 1024, touch: true },
+              { name: 'desktop', width: 1440, height: 900, touch: false },
+            ],
+            firefox: [
+              { name: 'mobile', width: 430, height: 932, touch: false },
+              { name: 'desktop', width: 1440, height: 900, touch: false },
+            ],
+            webkit: [
+              { name: 'mobile', width: 430, height: 932, touch: true },
+              { name: 'desktop', width: 1440, height: 900, touch: false },
+            ],
+          };
+
+          const results = [];
+
+          function knownMissingURL(url) {
+            return knownMissing.some(name => url.includes(name));
+          }
+
+          async function validatePage(engineName, browserType, vp) {
+            const browser = await browserType.launch();
+            const context = await browser.newContext({
+              viewport: { width: vp.width, height: vp.height },
+              hasTouch: vp.touch,
+            });
+            const page = await context.newPage();
+            const unexpectedConsoleErrors = [];
+            const unexpectedPageErrors = [];
+            const unexpectedFailedRequests = [];
+
+            await page.route(mediaPattern, route => route.abort('blockedbyclient'));
+            page.on('console', msg => {
+              if (msg.type() !== 'error') return;
+              const url = msg.location()?.url || '';
+              if (!knownMissingURL(url)) unexpectedConsoleErrors.push(`${url} ${msg.text()}`.trim());
+            });
+            page.on('pageerror', err => unexpectedPageErrors.push(String(err)));
+            page.on('requestfailed', req => {
+              const url = req.url();
+              if (mediaPattern.test(url) || knownMissingURL(url)) return;
+              unexpectedFailedRequests.push(`${url} ${req.failure()?.errorText || ''}`.trim());
+            });
+
+            const response = await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            assert.equal(response?.status(), 200, `${engineName}/${vp.name}: principal page status`);
+            await page.waitForFunction(() => typeof window.switchTab === 'function' && typeof window.Chart !== 'undefined' && typeof window.lucide !== 'undefined', null, { timeout: 30000 });
+            await page.waitForTimeout(500);
+
+            assert.equal(await page.locator('video[preload="metadata"]').count(), 3);
+            assert.equal(await page.locator('audio[preload="metadata"]').count(), 3);
+            assert.equal(await page.locator('#nav-bridge').getAttribute('aria-current'), 'page');
+            assert.equal(await page.locator('.skip-link').count(), 1);
+            assert.ok(await page.locator('link[href="./tailwind.css"]').count());
+            assert.ok(await page.locator('link[href="./refinement.css"]').count());
+
+            const overflow = await page.evaluate(() => ({
+              root: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              body: document.body.scrollWidth - document.body.clientWidth,
+            }));
+            assert.ok(overflow.root <= 1 && overflow.body <= 1, `${engineName}/${vp.name}: horizontal overflow ${JSON.stringify(overflow)}`);
+
+            if (vp.width < 768) {
+              const menu = page.locator('#mobileMenuBtn');
+              await menu.focus();
+              assert.equal(await menu.getAttribute('aria-expanded'), 'false');
+              await menu.click();
+              assert.equal(await menu.getAttribute('aria-expanded'), 'true');
+              assert.equal(await page.evaluate(() => document.activeElement?.id), 'mobileMenuClose');
+              await page.keyboard.press('Escape');
+              assert.equal(await menu.getAttribute('aria-expanded'), 'false');
+              assert.equal(await page.evaluate(() => document.activeElement?.id), 'mobileMenuBtn');
+            }
+
+            const source = page.locator('.source-badge').first();
+            await source.focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await source.getAttribute('aria-expanded'), 'true');
+            await page.keyboard.press('Escape');
+            assert.equal(await source.getAttribute('aria-expanded'), 'false');
+
+            await page.evaluate(() => window.switchTab('ecosystem'));
+            assert.equal(await page.locator('#nav-ecosystem').getAttribute('aria-current'), 'page');
+            const zone = page.locator('.blueprint-zone').first();
+            await zone.focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await zone.getAttribute('aria-expanded'), 'true');
+            await page.keyboard.press('Escape');
+            assert.equal(await zone.getAttribute('aria-expanded'), 'false');
+
+            await page.evaluate(() => window.switchTab('financials'));
+            const slider = page.locator('#delay-slider');
+            await slider.focus();
+            const before = await slider.getAttribute('aria-valuetext');
+            await page.keyboard.press('ArrowRight');
+            await page.waitForTimeout(50);
+            const after = await slider.getAttribute('aria-valuetext');
+            assert.notEqual(before, after);
+            assert.match(after || '', /months, total cash burn/);
+
+            await page.evaluate(() => window.switchTab('radar'));
+            const layer = page.locator('.funnel-layer').first();
+            await layer.focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await layer.getAttribute('aria-pressed'), 'true');
+            assert.match((await page.locator('#funnel-title').textContent()) || '', /Critical Path/);
+            assert.equal(await page.locator('#funnel-list').getAttribute('aria-live'), 'polite');
+
+            await page.evaluate(() => window.switchTab('roadmap'));
+            assert.equal(await page.locator('#nav-roadmap').getAttribute('aria-current'), 'page');
+            await page.screenshot({ path: `qa/${engineName}-${vp.name}.png`, fullPage: false });
+
+            assert.deepEqual(unexpectedPageErrors, [], `${engineName}/${vp.name}: page errors`);
+            assert.deepEqual(unexpectedFailedRequests, [], `${engineName}/${vp.name}: failed requests`);
+            assert.deepEqual(unexpectedConsoleErrors, [], `${engineName}/${vp.name}: console errors`);
+
+            results.push({ engine: engineName, viewport: vp.name, overflow, status: 'pass' });
+            await context.close();
+            await browser.close();
+          }
+
+          for (const [engineName, browserType] of Object.entries(engines)) {
+            for (const vp of viewportSets[engineName]) {
+              await validatePage(engineName, browserType, vp);
+            }
+          }
+
+          const reducedBrowser = await chromium.launch();
+          const reducedContext = await reducedBrowser.newContext({ viewport: { width: 430, height: 932 }, reducedMotion: 'reduce' });
+          const reducedPage = await reducedContext.newPage();
+          await reducedPage.route(mediaPattern, route => route.abort('blockedbyclient'));
+          await reducedPage.goto(baseURL, { waitUntil: 'domcontentloaded' });
+          const reduced = await reducedPage.evaluate(() => ({
+            matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
+            duration: getComputedStyle(document.querySelector('.slide-up')).animationDuration,
+          }));
+          assert.equal(reduced.matches, true);
+          assert.ok(['0s', '0.00001s', '0.01ms'].includes(reduced.duration), `Reduced motion duration: ${reduced.duration}`);
+          await reducedPage.screenshot({ path: 'qa/chromium-reduced-motion.png', fullPage: false });
+          await reducedContext.close();
+          await reducedBrowser.close();
+
+          fs.writeFileSync('qa/results.json', JSON.stringify({ results, reduced }, null, 2));
+          console.log(JSON.stringify({ results, reduced }, null, 2));
+          JS
+          node /tmp/dayton-validate.mjs
+          kill $(cat /tmp/dayton-http.pid) || true
+
+      - name: Upload QA screenshots and results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dayton-refinement-qa
+          path: qa/
+          if-no-files-found: error
+          retention-days: 7
