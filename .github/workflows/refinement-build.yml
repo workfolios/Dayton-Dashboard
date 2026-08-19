@@ -61,7 +61,7 @@ jobs:
           mkdir -p qa
           python3 -m http.server 4173 > /tmp/dayton-http.log 2>&1 &
           echo $! > /tmp/dayton-http.pid
-          cat > /tmp/dayton-validate.mjs <<'JS'
+          cat > qa/dayton-validate.mjs <<'JS'
           import { chromium, firefox, webkit } from 'playwright';
           import assert from 'node:assert/strict';
           import fs from 'node:fs';
@@ -196,7 +196,7 @@ jobs:
           fs.writeFileSync('qa/results.json', JSON.stringify({ results, reduced }, null, 2));
           console.log(JSON.stringify({ results, reduced }, null, 2));
           JS
-          node /tmp/dayton-validate.mjs
+          node qa/dayton-validate.mjs
           kill $(cat /tmp/dayton-http.pid) || true
 
       - name: Upload QA evidence
