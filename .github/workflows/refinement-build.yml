@@ -1,0 +1,56 @@
+name: Temporary Dayton Refinement Build
+
+on:
+  push:
+    branches:
+      - agent/dayton-refinement-2026-08-19
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    if: ${{ !contains(github.event.head_commit.message, '[refinement-build]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audited branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Apply authorized HTML refinements
+        run: python3 scripts/apply-refinement.py
+
+      - name: Generate deterministic Tailwind CSS
+        run: |
+          printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > /tmp/dayton-tailwind.css
+          npx --yes tailwindcss@3.4.17 -i /tmp/dayton-tailwind.css -o tailwind.css --minify --content ./index.html,./refinement.js
+
+      - name: Validate generated source
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          HTMLParser().feed(Path('index.html').read_text(encoding='utf-8'))
+          print('HTML parse: pass')
+          PY
+          node --check refinement.js
+          test -s tailwind.css
+          grep -q 'class="skip-link"' index.html
+          grep -q 'preload="metadata"' index.html
+          grep -q 'prefers-reduced-motion' refinement.css
+          grep -q 'chart.js@4.5.1' index.html
+          grep -q 'lucide@1.28.0' index.html
+          ! grep -q 'cdn.tailwindcss.com' index.html
+
+      - name: Commit deterministic implementation artifact
+        run: |
+          if git diff --quiet -- index.html tailwind.css; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html tailwind.css
+          git commit -m 'Implement Dayton refinement [refinement-build]'
+          git push origin HEAD:agent/dayton-refinement-2026-08-19
