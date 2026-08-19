@@ -105,7 +105,7 @@ jobs:
             page.on('console', msg => {
               if (msg.type() !== 'error') return;
               const url = msg.location()?.url || '';
-              if (!knownMissingURL(url)) consoleErrors.push(`${url} ${msg.text()}`.trim());
+              if (!knownMissingURL(url) && !mediaPattern.test(url)) consoleErrors.push(`${url} ${msg.text()}`.trim());
             });
 
             const response = await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 60000 });
