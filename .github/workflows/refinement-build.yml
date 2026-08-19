@@ -188,7 +188,7 @@ jobs:
           await reducedPage.goto(baseURL, { waitUntil: 'domcontentloaded' });
           const reduced = await reducedPage.evaluate(() => ({ matches: matchMedia('(prefers-reduced-motion: reduce)').matches, duration: getComputedStyle(document.querySelector('.slide-up')).animationDuration }));
           assert.equal(reduced.matches, true);
-          assert.ok(['0s', '0.00001s', '0.01ms'].includes(reduced.duration), `Reduced motion duration: ${reduced.duration}`);
+          assert.ok(['0s', '0.00001s', '0.01ms', '1e-05s'].includes(reduced.duration), `Reduced motion duration: ${reduced.duration}`);
           await reducedPage.screenshot({ path: 'qa/chromium-reduced-motion.png', fullPage: false });
           await reducedContext.close();
           await reducedBrowser.close();
