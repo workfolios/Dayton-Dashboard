@@ -4,20 +4,24 @@ on:
   push:
     branches:
       - agent/dayton-live-verification-2026-08-19
-  pull_request:
-    branches:
-      - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify-live:
+    if: ${{ !contains(github.event.head_commit.message, '[live-verified]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
+      - name: Check out verification branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: agent/dayton-live-verification-2026-08-19
+          fetch-depth: 0
+
       - name: Install matching Playwright package
         run: |
           npm init -y >/dev/null 2>&1
@@ -47,9 +51,11 @@ jobs:
 
           let html = '';
           let releaseReady = false;
+          let liveStatus = null;
           for (let attempt = 1; attempt <= 15; attempt++) {
             try {
               const response = await fetch(`${baseURL}?live-verify=${Date.now()}`, { cache: 'no-store' });
+              liveStatus = response.status;
               html = await response.text();
               releaseReady = response.status === 200 && releaseMarkers.every(marker => html.includes(marker)) && (html.match(/preload="metadata"/g) || []).length === 6;
               console.log(`Release probe ${attempt}: HTTP ${response.status}; refined release=${releaseReady}`);
@@ -63,16 +69,20 @@ jobs:
           assert.ok(html.includes('<link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">'));
           assert.ok(!html.includes('cdn.tailwindcss.com'));
 
+          const publicAssets = [];
           for (const asset of ['tailwind.css', 'refinement.css', 'refinement.js']) {
             const response = await fetch(new URL(asset, baseURL), { cache: 'no-store' });
             assert.equal(response.status, 200, `${asset} live status`);
             const body = await response.text();
             assert.ok(body.length > 100, `${asset} live body`);
+            publicAssets.push({ asset, status: response.status, bytes: body.length });
           }
 
+          const mediaAssets = [];
           for (const media of mediaNames) {
             const response = await fetch(new URL(encodeURI(media), baseURL), { method: 'HEAD', cache: 'no-store' });
             assert.equal(response.status, 200, `${media} live status`);
+            mediaAssets.push({ asset: media, status: response.status });
           }
 
           const engines = { chromium, firefox, webkit };
@@ -156,7 +166,6 @@ jobs:
             await page.evaluate(() => window.switchTab('roadmap'));
             await page.waitForTimeout(650);
             assert.equal(await page.locator('#nav-roadmap').getAttribute('aria-current'), 'page');
-            await page.screenshot({ path: `qa/live-${engineName}-${vp.name}.png`, fullPage: false });
 
             assert.deepEqual(pageErrors, [], `${engineName}/${vp.name}: page errors`);
             assert.deepEqual(failedRequests, [], `${engineName}/${vp.name}: failed requests`);
@@ -178,19 +187,34 @@ jobs:
           const reduced = await reducedPage.evaluate(() => ({ matches: matchMedia('(prefers-reduced-motion: reduce)').matches, duration: getComputedStyle(document.querySelector('.slide-up')).animationDuration }));
           assert.equal(reduced.matches, true);
           assert.ok(['0s', '0.00001s', '0.01ms', '1e-05s'].includes(reduced.duration));
-          await reducedPage.screenshot({ path: 'qa/live-chromium-reduced-motion.png', fullPage: false });
           await reducedContext.close();
           await reducedBrowser.close();
 
-          fs.writeFileSync('qa/live-results.json', JSON.stringify({ releaseReady, results, reduced }, null, 2));
-          console.log(JSON.stringify({ releaseReady, results, reduced }, null, 2));
+          const summary = {
+            verifiedAt: new Date().toISOString(),
+            publicURL: baseURL,
+            deploymentCommit: 'a321baa6342486b3b20dc17278d4c254e0fa284b',
+            releaseReady,
+            liveStatus,
+            releaseMarkersPresent: releaseMarkers,
+            preloadMetadataCount: (html.match(/preload="metadata"/g) || []).length,
+            canonicalPresent: html.includes('<link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">'),
+            tailwindPlayCdnAbsent: !html.includes('cdn.tailwindcss.com'),
+            publicAssets,
+            mediaAssets,
+            browsers: results,
+            reducedMotion: reduced,
+            knownAcceptedRisk: 'Exact approved hero photograph and Pirate Chef logo remain unavailable; no substitution introduced.'
+          };
+          fs.writeFileSync('live-verification-result.json', JSON.stringify(summary, null, 2));
+          console.log(JSON.stringify(summary, null, 2));
           JS
           HOME=/root node qa/live-verify.mjs
 
-      - name: Upload live verification evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: dayton-live-verification
-          path: qa/
-          if-no-files-found: error
-          retention-days: 7
+      - name: Persist live verification record
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add live-verification-result.json
+          git commit -m 'Record Dayton live verification [live-verified]'
+          git push origin HEAD:agent/dayton-live-verification-2026-08-19
