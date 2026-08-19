@@ -168,6 +168,7 @@ jobs:
 
             await page.evaluate(() => window.switchTab('roadmap'));
             assert.equal(await page.locator('#nav-roadmap').getAttribute('aria-current'), 'page');
+            await page.waitForTimeout(650);
             await page.screenshot({ path: `qa/${engineName}-${vp.name}.png`, fullPage: false });
             assert.deepEqual(pageErrors, [], `${engineName}/${vp.name}: page errors`);
             assert.deepEqual(failedRequests, [], `${engineName}/${vp.name}: failed requests`);
