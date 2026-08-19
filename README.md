@@ -10,7 +10,7 @@ https://workfolios.github.io/Dayton-Dashboard/
 
 - Static HTML/CSS/JavaScript deployed through GitHub Pages.
 - `index.html` contains the briefing architecture, navigation, interactive state, chart configuration, sensitivity control, validation funnel, roadmap, and media lifecycle logic.
-- `tailwind.css` is the intended deterministic production stylesheet for the refined release.
+- `tailwind.css` is the deterministic production stylesheet for the refined release.
 - Chart.js and Lucide are loaded as explicitly version-pinned runtime dependencies.
 - Six local MP3/MP4 files provide the approved multimodal briefing content.
 
@@ -18,6 +18,7 @@ https://workfolios.github.io/Dayton-Dashboard/
 
 - Preserve the approved five-stage briefing architecture, copy, CTA strategy, financial assumptions, scenario calculations, validation data, roadmap content, media, and visual character.
 - Do not substitute missing approved hero/logo artwork with approximations.
+- The referenced hero photograph and Pirate Chef logo are authority-constrained deferred assets until exact approved files are recovered.
 - The external `Launch Validation App` link is a companion workflow and is not hosted by this repository.
 
 ## Validation Standard
