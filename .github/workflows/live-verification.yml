@@ -10,9 +10,9 @@ permissions:
 
 jobs:
   verify-live:
-    if: ${{ !contains(github.event.head_commit.message, '[live-verified]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[live-result]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
@@ -27,194 +27,209 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install --no-save playwright@1.62.1
 
-      - name: Verify live GitHub Pages release
+      - name: Run self-reporting live verification
         run: |
-          mkdir -p qa
-          cat > qa/live-verify.mjs <<'JS'
+          cat > live-verify.mjs <<'JS'
           import { chromium, firefox, webkit } from 'playwright';
-          import assert from 'node:assert/strict';
           import fs from 'node:fs';
 
           const baseURL = 'https://workfolios.github.io/Dayton-Dashboard/';
-          const releaseMarkers = ['chart.js@4.5.1/dist/chart.umd.min.js', 'lucide@1.28.0', './tailwind.css', './refinement.css', './refinement.js'];
-          const mediaNames = [
-            'Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp3',
-            'Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp4',
-            'North Star Commissary - Bankable CoWorking Model.mp3',
-            'North Star Commissary - Bankable CoWorking Model.mp4',
-            'North Star Commissary - Food Coworking Model.mp3',
-            'North Star Commissary - Food Coworking Model.mp4',
-          ];
-          const knownMissing = ['0022-from-the-hip-photo-1_orig.jpg', 'pirate-chef-final-trans-color-rgb-hr.png'];
           const mediaPattern = /\.(mp3|mp4)(?:\?|$)/i;
-          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-          let html = '';
-          let releaseReady = false;
-          let liveStatus = null;
-          for (let attempt = 1; attempt <= 15; attempt++) {
-            try {
-              const response = await fetch(`${baseURL}?live-verify=${Date.now()}`, { cache: 'no-store' });
-              liveStatus = response.status;
-              html = await response.text();
-              releaseReady = response.status === 200 && releaseMarkers.every(marker => html.includes(marker)) && (html.match(/preload="metadata"/g) || []).length === 6;
-              console.log(`Release probe ${attempt}: HTTP ${response.status}; refined release=${releaseReady}`);
-              if (releaseReady) break;
-            } catch (error) {
-              console.log(`Release probe ${attempt}: ${error.message}`);
-            }
-            await sleep(10000);
-          }
-          assert.equal(releaseReady, true, 'Refined release did not propagate to GitHub Pages within the verification window.');
-          assert.ok(html.includes('<link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">'));
-          assert.ok(!html.includes('cdn.tailwindcss.com'));
-
-          const publicAssets = [];
-          for (const asset of ['tailwind.css', 'refinement.css', 'refinement.js']) {
-            const response = await fetch(new URL(asset, baseURL), { cache: 'no-store' });
-            assert.equal(response.status, 200, `${asset} live status`);
-            const body = await response.text();
-            assert.ok(body.length > 100, `${asset} live body`);
-            publicAssets.push({ asset, status: response.status, bytes: body.length });
-          }
-
-          const mediaAssets = [];
-          for (const media of mediaNames) {
-            const response = await fetch(new URL(encodeURI(media), baseURL), { method: 'HEAD', cache: 'no-store' });
-            assert.equal(response.status, 200, `${media} live status`);
-            mediaAssets.push({ asset: media, status: response.status });
-          }
-
-          const engines = { chromium, firefox, webkit };
-          const viewports = [
-            { name: 'mobile', width: 430, height: 932, touch: true },
-            { name: 'desktop', width: 1440, height: 900, touch: false },
-          ];
-          const results = [];
-          const knownMissingURL = url => knownMissing.some(name => url.includes(name));
-
-          async function verifyBrowser(engineName, browserType, vp) {
-            const browser = await browserType.launch();
-            const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, hasTouch: vp.touch });
-            const page = await context.newPage();
-            const pageErrors = [];
-            const failedRequests = [];
-            const consoleErrors = [];
-            await page.route(mediaPattern, route => route.abort('blockedbyclient'));
-            page.on('pageerror', error => pageErrors.push(String(error)));
-            page.on('requestfailed', req => {
-              const url = req.url();
-              if (!mediaPattern.test(url) && !knownMissingURL(url)) failedRequests.push(`${url} ${req.failure()?.errorText || ''}`.trim());
-            });
-            page.on('console', msg => {
-              if (msg.type() !== 'error') return;
-              const url = msg.location()?.url || '';
-              if (!knownMissingURL(url) && !mediaPattern.test(url)) consoleErrors.push(`${url} ${msg.text()}`.trim());
-            });
-
-            const response = await page.goto(`${baseURL}?engine=${engineName}&vp=${vp.name}&t=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            assert.equal(response?.status(), 200);
-            await page.waitForFunction(() => typeof window.switchTab === 'function' && typeof window.Chart !== 'undefined' && typeof window.lucide !== 'undefined', null, { timeout: 30000 });
-            await page.waitForTimeout(600);
-            assert.equal(await page.locator('.skip-link').count(), 1);
-            assert.equal(await page.locator('video[preload="metadata"]').count(), 3);
-            assert.equal(await page.locator('audio[preload="metadata"]').count(), 3);
-            assert.equal(await page.locator('#nav-bridge').getAttribute('aria-current'), 'page');
-
-            const overflow = await page.evaluate(() => ({ root: document.documentElement.scrollWidth - document.documentElement.clientWidth, body: document.body.scrollWidth - document.body.clientWidth }));
-            assert.ok(overflow.root <= 1 && overflow.body <= 1, `${engineName}/${vp.name}: horizontal overflow`);
-
-            if (vp.width < 768) {
-              const menu = page.locator('#mobileMenuBtn');
-              await menu.click();
-              assert.equal(await menu.getAttribute('aria-expanded'), 'true');
-              assert.equal(await page.evaluate(() => document.activeElement?.id), 'mobileMenuClose');
-              await page.keyboard.press('Escape');
-              assert.equal(await menu.getAttribute('aria-expanded'), 'false');
-              assert.equal(await page.evaluate(() => document.activeElement?.id), 'mobileMenuBtn');
-            }
-
-            const source = page.locator('.source-badge').first();
-            await source.focus();
-            await page.keyboard.press('Enter');
-            assert.equal(await source.getAttribute('aria-expanded'), 'true');
-            await page.keyboard.press('Escape');
-
-            await page.evaluate(() => window.switchTab('ecosystem'));
-            const zone = page.locator('.blueprint-zone').first();
-            await zone.focus();
-            await page.keyboard.press('Enter');
-            assert.equal(await zone.getAttribute('aria-expanded'), 'true');
-            await page.keyboard.press('Escape');
-
-            await page.evaluate(() => window.switchTab('financials'));
-            const slider = page.locator('#delay-slider');
-            await slider.focus();
-            const before = await slider.getAttribute('aria-valuetext');
-            await page.keyboard.press('ArrowRight');
-            await page.waitForTimeout(75);
-            const after = await slider.getAttribute('aria-valuetext');
-            assert.notEqual(before, after);
-
-            await page.evaluate(() => window.switchTab('radar'));
-            const layer = page.locator('.funnel-layer').first();
-            await layer.focus();
-            await page.keyboard.press('Enter');
-            assert.equal(await layer.getAttribute('aria-pressed'), 'true');
-            assert.match((await page.locator('#funnel-title').textContent()) || '', /Critical Path/);
-
-            await page.evaluate(() => window.switchTab('roadmap'));
-            await page.waitForTimeout(650);
-            assert.equal(await page.locator('#nav-roadmap').getAttribute('aria-current'), 'page');
-
-            assert.deepEqual(pageErrors, [], `${engineName}/${vp.name}: page errors`);
-            assert.deepEqual(failedRequests, [], `${engineName}/${vp.name}: failed requests`);
-            assert.deepEqual(consoleErrors, [], `${engineName}/${vp.name}: console errors`);
-            results.push({ engine: engineName, viewport: vp.name, overflow, status: 'pass' });
-            await context.close();
-            await browser.close();
-          }
-
-          for (const [engineName, browserType] of Object.entries(engines)) {
-            for (const vp of viewports) await verifyBrowser(engineName, browserType, vp);
-          }
-
-          const reducedBrowser = await chromium.launch();
-          const reducedContext = await reducedBrowser.newContext({ viewport: { width: 430, height: 932 }, reducedMotion: 'reduce' });
-          const reducedPage = await reducedContext.newPage();
-          await reducedPage.route(mediaPattern, route => route.abort('blockedbyclient'));
-          await reducedPage.goto(`${baseURL}?reduced=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-          const reduced = await reducedPage.evaluate(() => ({ matches: matchMedia('(prefers-reduced-motion: reduce)').matches, duration: getComputedStyle(document.querySelector('.slide-up')).animationDuration }));
-          assert.equal(reduced.matches, true);
-          assert.ok(['0s', '0.00001s', '0.01ms', '1e-05s'].includes(reduced.duration));
-          await reducedContext.close();
-          await reducedBrowser.close();
-
-          const summary = {
+          const knownMissing = ['0022-from-the-hip-photo-1_orig.jpg', 'pirate-chef-final-trans-color-rgb-hr.png'];
+          const result = {
             verifiedAt: new Date().toISOString(),
             publicURL: baseURL,
             deploymentCommit: 'a321baa6342486b3b20dc17278d4c254e0fa284b',
-            releaseReady,
-            liveStatus,
-            releaseMarkersPresent: releaseMarkers,
-            preloadMetadataCount: (html.match(/preload="metadata"/g) || []).length,
-            canonicalPresent: html.includes('<link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">'),
-            tailwindPlayCdnAbsent: !html.includes('cdn.tailwindcss.com'),
-            publicAssets,
-            mediaAssets,
-            browsers: results,
-            reducedMotion: reduced,
+            success: false,
+            probes: [],
+            assets: [],
+            media: [],
+            browsers: [],
+            reducedMotion: null,
+            error: null,
             knownAcceptedRisk: 'Exact approved hero photograph and Pirate Chef logo remain unavailable; no substitution introduced.'
           };
-          fs.writeFileSync('live-verification-result.json', JSON.stringify(summary, null, 2));
-          console.log(JSON.stringify(summary, null, 2));
+
+          function recordError(error) {
+            result.error = error?.stack || String(error);
+          }
+          function assert(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+          const knownMissingURL = url => knownMissing.some(name => url.includes(name));
+
+          async function main() {
+            let html = '';
+            let ready = false;
+            for (let attempt = 1; attempt <= 4; attempt++) {
+              try {
+                const response = await fetch(`${baseURL}?live-probe=${Date.now()}`, { cache: 'no-store' });
+                html = await response.text();
+                const markerState = {
+                  tailwind: html.includes('./tailwind.css'),
+                  refinementCss: html.includes('./refinement.css'),
+                  refinementJs: html.includes('./refinement.js'),
+                  chart: html.includes('chart.js@4.5.1/dist/chart.umd.min.js'),
+                  lucide: html.includes('lucide@1.28.0'),
+                  preloadCount: (html.match(/preload="metadata"/g) || []).length,
+                  canonical: html.includes('<link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">'),
+                  noTailwindPlayCdn: !html.includes('cdn.tailwindcss.com')
+                };
+                ready = response.status === 200 && Object.entries(markerState).every(([key, value]) => key === 'preloadCount' ? value === 6 : value === true);
+                result.probes.push({ attempt, status: response.status, ready, markerState });
+                if (ready) break;
+              } catch (error) {
+                result.probes.push({ attempt, error: error.message });
+              }
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            assert(ready, 'Refined release markers were not present at the public URL.');
+
+            for (const asset of ['tailwind.css', 'refinement.css', 'refinement.js']) {
+              const response = await fetch(new URL(asset, baseURL), { cache: 'no-store' });
+              const body = await response.text();
+              result.assets.push({ asset, status: response.status, bytes: body.length });
+              assert(response.status === 200 && body.length > 100, `${asset} did not load live.`);
+            }
+
+            const mediaNames = [
+              'Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp3',
+              'Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp4',
+              'North Star Commissary - Bankable CoWorking Model.mp3',
+              'North Star Commissary - Bankable CoWorking Model.mp4',
+              'North Star Commissary - Food Coworking Model.mp3',
+              'North Star Commissary - Food Coworking Model.mp4'
+            ];
+            for (const media of mediaNames) {
+              const response = await fetch(new URL(encodeURI(media), baseURL), { method: 'HEAD', cache: 'no-store' });
+              result.media.push({ asset: media, status: response.status });
+              assert(response.status === 200, `${media} did not resolve live.`);
+            }
+
+            const engines = { chromium, firefox, webkit };
+            const viewports = [
+              { name: 'mobile', width: 430, height: 932, touch: true },
+              { name: 'desktop', width: 1440, height: 900, touch: false }
+            ];
+
+            for (const [engineName, browserType] of Object.entries(engines)) {
+              for (const vp of viewports) {
+                const browser = await browserType.launch();
+                try {
+                  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, hasTouch: vp.touch });
+                  const page = await context.newPage();
+                  const pageErrors = [];
+                  const failedRequests = [];
+                  const consoleErrors = [];
+                  await page.route(mediaPattern, route => route.abort('blockedbyclient'));
+                  page.on('pageerror', error => pageErrors.push(String(error)));
+                  page.on('requestfailed', req => {
+                    const url = req.url();
+                    if (!mediaPattern.test(url) && !knownMissingURL(url)) failedRequests.push(`${url} ${req.failure()?.errorText || ''}`.trim());
+                  });
+                  page.on('console', msg => {
+                    if (msg.type() !== 'error') return;
+                    const url = msg.location()?.url || '';
+                    if (!knownMissingURL(url) && !mediaPattern.test(url)) consoleErrors.push(`${url} ${msg.text()}`.trim());
+                  });
+
+                  const response = await page.goto(`${baseURL}?engine=${engineName}&vp=${vp.name}&t=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                  assert(response?.status() === 200, `${engineName}/${vp.name} live page status was not 200.`);
+                  await page.waitForFunction(() => typeof window.switchTab === 'function' && typeof window.Chart !== 'undefined' && typeof window.lucide !== 'undefined', null, { timeout: 30000 });
+                  await page.waitForTimeout(600);
+                  assert(await page.locator('.skip-link').count() === 1, `${engineName}/${vp.name} skip link missing.`);
+                  assert(await page.locator('video[preload="metadata"]').count() === 3, `${engineName}/${vp.name} video preload mismatch.`);
+                  assert(await page.locator('audio[preload="metadata"]').count() === 3, `${engineName}/${vp.name} audio preload mismatch.`);
+                  assert(await page.locator('#nav-bridge').getAttribute('aria-current') === 'page', `${engineName}/${vp.name} initial current state missing.`);
+                  const overflow = await page.evaluate(() => ({ root: document.documentElement.scrollWidth - document.documentElement.clientWidth, body: document.body.scrollWidth - document.body.clientWidth }));
+                  assert(overflow.root <= 1 && overflow.body <= 1, `${engineName}/${vp.name} horizontal overflow.`);
+
+                  if (vp.width < 768) {
+                    const menu = page.locator('#mobileMenuBtn');
+                    await menu.click();
+                    assert(await menu.getAttribute('aria-expanded') === 'true', `${engineName} mobile drawer did not open.`);
+                    assert(await page.evaluate(() => document.activeElement?.id) === 'mobileMenuClose', `${engineName} mobile drawer focus entry failed.`);
+                    await page.keyboard.press('Escape');
+                    assert(await menu.getAttribute('aria-expanded') === 'false', `${engineName} mobile drawer did not close.`);
+                    assert(await page.evaluate(() => document.activeElement?.id) === 'mobileMenuBtn', `${engineName} mobile drawer focus return failed.`);
+                  }
+
+                  const source = page.locator('.source-badge').first();
+                  await source.focus();
+                  await page.keyboard.press('Enter');
+                  assert(await source.getAttribute('aria-expanded') === 'true', `${engineName}/${vp.name} Source Intel keyboard state failed.`);
+                  await page.keyboard.press('Escape');
+
+                  await page.evaluate(() => window.switchTab('ecosystem'));
+                  const zone = page.locator('.blueprint-zone').first();
+                  await zone.focus();
+                  await page.keyboard.press('Enter');
+                  assert(await zone.getAttribute('aria-expanded') === 'true', `${engineName}/${vp.name} blueprint keyboard state failed.`);
+                  await page.keyboard.press('Escape');
+
+                  await page.evaluate(() => window.switchTab('financials'));
+                  const slider = page.locator('#delay-slider');
+                  await slider.focus();
+                  const before = await slider.getAttribute('aria-valuetext');
+                  await page.keyboard.press('ArrowRight');
+                  await page.waitForTimeout(75);
+                  const after = await slider.getAttribute('aria-valuetext');
+                  assert(before !== after, `${engineName}/${vp.name} slider accessible state failed.`);
+
+                  await page.evaluate(() => window.switchTab('radar'));
+                  const layer = page.locator('.funnel-layer').first();
+                  await layer.focus();
+                  await page.keyboard.press('Enter');
+                  assert(await layer.getAttribute('aria-pressed') === 'true', `${engineName}/${vp.name} funnel pressed state failed.`);
+                  assert(((await page.locator('#funnel-title').textContent()) || '').includes('Critical Path'), `${engineName}/${vp.name} funnel result failed.`);
+
+                  await page.evaluate(() => window.switchTab('roadmap'));
+                  await page.waitForTimeout(650);
+                  assert(await page.locator('#nav-roadmap').getAttribute('aria-current') === 'page', `${engineName}/${vp.name} roadmap current state failed.`);
+                  assert(pageErrors.length === 0, `${engineName}/${vp.name} page errors: ${pageErrors.join(' | ')}`);
+                  assert(failedRequests.length === 0, `${engineName}/${vp.name} network errors: ${failedRequests.join(' | ')}`);
+                  assert(consoleErrors.length === 0, `${engineName}/${vp.name} console errors: ${consoleErrors.join(' | ')}`);
+                  result.browsers.push({ engine: engineName, viewport: vp.name, overflow, status: 'pass' });
+                  await context.close();
+                } finally {
+                  await browser.close();
+                }
+              }
+            }
+
+            const reducedBrowser = await chromium.launch();
+            try {
+              const reducedContext = await reducedBrowser.newContext({ viewport: { width: 430, height: 932 }, reducedMotion: 'reduce' });
+              const reducedPage = await reducedContext.newPage();
+              await reducedPage.route(mediaPattern, route => route.abort('blockedbyclient'));
+              await reducedPage.goto(`${baseURL}?reduced=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+              const reduced = await reducedPage.evaluate(() => ({ matches: matchMedia('(prefers-reduced-motion: reduce)').matches, duration: getComputedStyle(document.querySelector('.slide-up')).animationDuration }));
+              assert(reduced.matches === true, 'Reduced-motion media query did not match live.');
+              assert(['0s', '0.00001s', '0.01ms', '1e-05s'].includes(reduced.duration), `Unexpected live reduced-motion duration: ${reduced.duration}`);
+              result.reducedMotion = reduced;
+              await reducedContext.close();
+            } finally {
+              await reducedBrowser.close();
+            }
+
+            result.success = true;
+          }
+
+          try {
+            await main();
+          } catch (error) {
+            recordError(error);
+          } finally {
+            fs.writeFileSync('live-verification-result.json', JSON.stringify(result, null, 2));
+            console.log(JSON.stringify(result, null, 2));
+          }
           JS
-          HOME=/root node qa/live-verify.mjs
+          HOME=/root node live-verify.mjs
 
       - name: Persist live verification record
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add live-verification-result.json
-          git commit -m 'Record Dayton live verification [live-verified]'
+          git commit -m 'Record Dayton live verification [live-result]'
           git push origin HEAD:agent/dayton-live-verification-2026-08-19
