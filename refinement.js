@@ -52,7 +52,7 @@
   }
 
   function openDrawer() {
-    lastDrawerTrigger = document.activeElement === mobileBtn ? mobileBtn : mobileBtn;
+    lastDrawerTrigger = mobileBtn;
     setDrawerState(true);
   }
 
