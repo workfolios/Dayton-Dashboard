@@ -196,7 +196,7 @@ jobs:
           fs.writeFileSync('qa/results.json', JSON.stringify({ results, reduced }, null, 2));
           console.log(JSON.stringify({ results, reduced }, null, 2));
           JS
-          node qa/dayton-validate.mjs
+          HOME=/root node qa/dayton-validate.mjs
           kill $(cat /tmp/dayton-http.pid) || true
 
       - name: Upload QA evidence
