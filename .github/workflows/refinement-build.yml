@@ -4,18 +4,22 @@ on:
   push:
     branches:
       - agent/dayton-refinement-2026-08-19
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   refine:
-    if: ${{ !contains(github.event.head_commit.message, '[refinement-build]') }}
+    if: ${{ github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[refinement-build]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out audited branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: agent/dayton-refinement-2026-08-19
           fetch-depth: 0
 
       - name: Apply authorized HTML refinements
