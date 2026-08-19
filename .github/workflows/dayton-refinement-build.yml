@@ -1,0 +1,49 @@
+name: Dayton Refinement Build
+
+on:
+  push:
+    branches:
+      - agent/dayton-refinement-accessibility-release
+
+permissions:
+  contents: write
+
+jobs:
+  apply-refinement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout refinement branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Apply authorized refinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d release/dayton-release.patch.gz.b64 | gzip -dc > /tmp/dayton-release.patch
+          git apply --check /tmp/dayton-release.patch
+          git apply /tmp/dayton-release.patch
+          mkdir -p assets
+          base64 -d release/dayton.css.gz.b64 | gzip -dc > assets/dayton.css
+          test "$(grep -o 'preload=\"metadata\"' index.html | wc -l)" -eq 6
+          grep -q 'chart.js@4.5.1' index.html
+          grep -q 'lucide@1.27.0' index.html
+          ! grep -q 'cdn.tailwindcss.com' index.html
+          ! grep -q 'lucide@latest' index.html
+          grep -q '0022-from-the-hip-photo-1_orig.jpg' index.html
+          grep -q 'pirate-chef-final-trans-color-rgb-hr.png' index.html
+          git diff --check
+
+      - name: Commit generated production files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html assets/dayton.css
+          git diff --cached --quiet && exit 0
+          git commit -m "Apply authorized Dayton refinement"
+          git push origin "HEAD:${{ github.ref_name }}"
