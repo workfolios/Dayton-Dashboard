@@ -1,0 +1,73 @@
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  background: #fff;
+  color: #18181b;
+  padding: .75rem 1rem;
+  border: 2px solid #ec4899;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+.skip-link:focus { transform: translateY(0); }
+
+:where(button, a, input, [role="button"]):focus-visible {
+  outline: 3px solid #ec4899;
+  outline-offset: 3px;
+}
+input[type="range"]:focus-visible {
+  outline: 3px solid #f472b6;
+  outline-offset: 5px;
+  border-radius: 9999px;
+}
+input[type="checkbox"]:focus-visible + .toggle-label {
+  outline: 3px solid #ec4899;
+  outline-offset: 3px;
+}
+
+.source-badge:focus .source-tooltip,
+.source-badge[data-expanded="true"] .source-tooltip,
+.blueprint-zone:focus .tooltip-custom,
+.blueprint-zone[data-expanded="true"] .tooltip-custom {
+  visibility: visible;
+  opacity: 1;
+}
+
+.funnel-layer[aria-pressed="true"] {
+  outline: 3px solid #18181b;
+  outline-offset: 3px;
+}
+
+.sr-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .blueprint-zone:hover,
+  .funnel-layer:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-pulse { animation: none !important; }
+  .blueprint-zone:hover,
+  .funnel-layer:hover,
+  .group:hover svg { transform: none !important; }
+}

@@ -4,9 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dayton 2.0 Assessment Dashboard | Pirate Chef</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta name="description" content="Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.">
+    <link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">
+    <meta property="og:description" content="Interactive business-plan assessment dashboard for the Dayton 2.0 operating model, financial assumptions, validation priorities, and funding roadmap.">
+    <meta property="og:url" content="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta name="twitter:card" content="summary">
+    <link rel="stylesheet" href="./tailwind.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.28.0"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
@@ -43,7 +50,6 @@
             background: #ec4899; cursor: pointer; margin-top: -10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #e4e4e7; border-radius: 2px; }
-        input[type=range]:focus { outline: none; }
         
         /* Blueprint Hover Effects */
         .blueprint-zone { transition: all 0.2s ease; cursor: default; }
@@ -68,8 +74,11 @@
             opacity: 1;
         }
     </style>
+    <link rel="stylesheet" href="./refinement.css">
 </head>
 <body class="text-zinc-800 antialiased h-screen flex flex-col md:flex-row overflow-hidden bg-[#fcfcfc]">
+
+    <a href="#main-content" class="skip-link">Skip to main briefing</a>
 
     <div class="md:hidden bg-zinc-950 text-white p-4 flex justify-between items-center z-20 border-b border-zinc-800 shadow-md">
         <div class="flex items-center space-x-3">
@@ -154,7 +163,7 @@
     </nav>
 
     <!-- Main Content Area -->
-    <main class="flex-grow overflow-y-auto relative h-full bg-zinc-50/50" id="main-content">
+    <main class="flex-grow overflow-y-auto relative h-full bg-zinc-50/50" id="main-content" tabindex="-1">
         <div class="max-w-5xl mx-auto p-4 md:p-10 pb-32">
             
             <!-- SECTION 1: THE BRIDGE -->
@@ -188,7 +197,7 @@
                                 <h5 class="text-white font-bold text-sm">7-Min Visual Overview</h5>
                             </div>
                             <p class="text-zinc-500 text-xs">Best for big-picture thinking and visual mapping.</p>
-                            <video controls class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
+                            <video controls preload="metadata" class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
                                 <source src="./North Star Commissary - Bankable CoWorking Model.mp4" type="video/mp4">
                                 Your browser does not support the video element.
                             </video>
@@ -202,7 +211,7 @@
                             </div>
                             <p class="text-zinc-500 text-xs">Best for deeper context and foundational education.</p>
                             <div class="mt-auto pt-4">
-                                <audio controls class="w-full outline-none rounded-sm">
+                                <audio controls preload="metadata" class="w-full outline-none rounded-sm">
                                     <source src="./North Star Commissary - Bankable CoWorking Model.mp3" type="audio/mpeg">
                                     Your browser does not support the audio element.
                                 </audio>
@@ -324,7 +333,7 @@
                                 <h5 class="text-white font-bold text-sm">7-Min Visual Overview</h5>
                             </div>
                             <p class="text-zinc-500 text-xs">Best for big-picture thinking and visual mapping.</p>
-                            <video controls class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
+                            <video controls preload="metadata" class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
                                 <source src="./North Star Commissary - Food Coworking Model.mp4" type="video/mp4">
                                 Your browser does not support the video element.
                             </video>
@@ -338,7 +347,7 @@
                             </div>
                             <p class="text-zinc-500 text-xs">Best for deeper context and foundational education.</p>
                             <div class="mt-auto pt-4">
-                                <audio controls class="w-full outline-none rounded-sm">
+                                <audio controls preload="metadata" class="w-full outline-none rounded-sm">
                                     <source src="./North Star Commissary - Food Coworking Model.mp3" type="audio/mpeg">
                                     Your browser does not support the audio element.
                                 </audio>
@@ -352,7 +361,7 @@
                         <p class="text-pink-500 text-xs font-bold uppercase tracking-[0.2em] mb-2">V.02 Assessment • Section 6-9</p>
                         <h2 class="text-3xl md:text-4xl font-brand text-zinc-900 mb-3">The Ecosystem Blueprint</h2>
                         <p class="text-zinc-600 text-sm md:text-base leading-relaxed">
-                            The V.02 Business Model translates abstract revenue streams into physical space. Hover over the zones in the Dayton blueprint below to reveal how the operations, compliance, and revenue models interact in the facility. 
+                            The V.02 Business Model translates abstract revenue streams into physical space. Explore the zones in the Dayton blueprint below to reveal how the operations, compliance, and revenue models interact in the facility. 
                         </p>
                     </div>
                     <!-- Source Documentation Tag -->
@@ -466,7 +475,7 @@
                                 <h5 class="text-white font-bold text-sm">7-Min Visual Overview</h5>
                             </div>
                             <p class="text-zinc-500 text-xs">Best for big-picture thinking and visual mapping.</p>
-                            <video controls class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
+                            <video controls preload="metadata" class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
                                 <source src="./Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp4" type="video/mp4">
                                 Your browser does not support the video element.
                             </video>
@@ -480,7 +489,7 @@
                             </div>
                             <p class="text-zinc-500 text-xs">Best for deeper context and foundational education.</p>
                             <div class="mt-auto pt-4">
-                                <audio controls class="w-full outline-none rounded-sm">
+                                <audio controls preload="metadata" class="w-full outline-none rounded-sm">
                                     <source src="./Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp3" type="audio/mpeg">
                                     Your browser does not support the audio element.
                                 </audio>
@@ -727,7 +736,7 @@
                         </div>
 
                         <!-- Sprint 2 -->
-                        <div class="flex flex-col md:flex-row items-start md:items-center w-full">
+                        <div class="flex flex-col md:flex-row items-start md:items-center w-full relative">
                             <div class="md:w-1/2 pr-8 md:text-right hidden md:block"></div>
                             <!-- Mobile Icon -->
                             <div class="md:hidden absolute left-0 top-0 w-12 h-12 bg-pink-500 text-white border-4 border-white rounded-full flex items-center justify-center text-xl shadow-md z-20 animate-pulse"><i data-lucide="zap" class="w-5 h-5"></i></div>
@@ -807,7 +816,7 @@
                 document.getElementById('sidebar').classList.add('-translate-x-full');
             }
 
-            document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' });
+            document.getElementById('main-content').scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 
             if (tabId === 'financials') {
                 initRevenueChart();
@@ -993,5 +1002,6 @@
             });
         }
     </script>
+    <script src="./refinement.js"></script>
 </body>
 </html>
