@@ -4,9 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dayton 2.0 Assessment Dashboard | Pirate Chef</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta name="description" content="Interactive Sprint 1 assessment dashboard for the Dayton 2.0 business plan, including the business model, financial scenarios, validation priorities, and funding roadmap.">
+    <link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">
+    <meta property="og:description" content="Interactive Sprint 1 assessment dashboard for the Dayton 2.0 business plan, including the business model, financial scenarios, validation priorities, and funding roadmap.">
+    <meta property="og:url" content="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">
+    <meta name="twitter:description" content="Interactive Sprint 1 assessment dashboard for the Dayton 2.0 business plan, including the business model, financial scenarios, validation priorities, and funding roadmap.">
+    <link rel="stylesheet" href="./assets/dayton.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.27.0/dist/umd/lucide.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
@@ -43,17 +52,61 @@
             background: #ec4899; cursor: pointer; margin-top: -10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #e4e4e7; border-radius: 2px; }
-        input[type=range]:focus { outline: none; }
+        input[type=range]:focus-visible {
+            outline: 3px solid #ec4899;
+            outline-offset: 5px;
+        }
+        :where(a, button, [role="button"], input):focus-visible {
+            outline: 3px solid #ec4899;
+            outline-offset: 3px;
+        }
+        .toggle-checkbox:focus-visible + .toggle-label {
+            outline: 3px solid #ec4899;
+            outline-offset: 3px;
+        }
+        .skip-link {
+            position: fixed;
+            left: 1rem;
+            top: 1rem;
+            z-index: 100;
+            transform: translateY(-200%);
+            background: #ffffff;
+            color: #18181b;
+            border: 2px solid #ec4899;
+            padding: 0.75rem 1rem;
+            font-weight: 700;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.12);
+        }
+        .skip-link:focus { transform: translateY(0); }
+        .tab-content h2[tabindex="-1"]:focus,
+        .tab-content h3[tabindex="-1"]:focus {
+            outline: none;
+        }
+        .sr-status {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
         
         /* Blueprint Hover Effects */
-        .blueprint-zone { transition: all 0.2s ease; cursor: default; }
-        .blueprint-zone:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #ec4899; }
+        .blueprint-zone { transition: all 0.2s ease; cursor: pointer; }
+        .blueprint-zone:hover, .blueprint-zone:focus-visible, .blueprint-zone.is-open { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #ec4899; }
         .tooltip-custom { visibility: hidden; opacity: 0; transition: visibility 0s, opacity 0.2s linear; }
-        .blueprint-zone:hover .tooltip-custom { visibility: visible; opacity: 1; }
+        .blueprint-zone:hover .tooltip-custom, .blueprint-zone.is-open .tooltip-custom { visibility: visible; opacity: 1; }
         
         /* Funnel Effects */
         .funnel-layer { transition: transform 0.2s ease; cursor: pointer; }
         .funnel-layer:hover { transform: scale(1.02); }
+        .funnel-layer[aria-pressed="true"] {
+            box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px #18181b;
+            transform: scale(1.015);
+        }
 
         /* Source Badge Hover */
         .source-tooltip {
@@ -63,25 +116,48 @@
             background-color: rgba(24, 24, 27, 0.90) !important;
             backdrop-filter: blur(5px);
         }
-        .source-badge:hover .source-tooltip {
+        .source-badge:hover .source-tooltip,
+        .source-badge.is-open .source-tooltip {
             visibility: visible;
             opacity: 1;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .blueprint-zone:hover,
+            .blueprint-zone:focus-visible,
+            .blueprint-zone.is-open,
+            .funnel-layer:hover,
+            .funnel-layer[aria-pressed="true"],
+            .group:hover svg {
+                transform: none !important;
+            }
         }
     </style>
 </head>
 <body class="text-zinc-800 antialiased h-screen flex flex-col md:flex-row overflow-hidden bg-[#fcfcfc]">
 
+    <a href="#main-content" id="skip-link" class="skip-link">Skip to main briefing</a>
+
     <div class="md:hidden bg-zinc-950 text-white p-4 flex justify-between items-center z-20 border-b border-zinc-800 shadow-md">
         <div class="flex items-center space-x-3">
             <span class="font-brand tracking-wide text-lg">PIRATE CHEF</span>
         </div>
-        <button id="mobileMenuBtn" class="p-2 text-zinc-300 hover:text-white transition-colors text-xl font-bold">
+        <button id="mobileMenuBtn" type="button" aria-label="Open briefing navigation" aria-expanded="false" aria-controls="sidebar" class="p-2 text-zinc-300 hover:text-white transition-colors text-xl font-bold">
             <i data-lucide="menu"></i>
         </button>
     </div>
 
     <!-- Sidebar Navigation -->
-    <nav id="sidebar" class="bg-zinc-950 text-zinc-400 w-full md:w-72 flex-shrink-0 absolute md:relative z-30 h-full transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col border-r border-zinc-900 shadow-2xl md:shadow-none">
+    <nav id="sidebar" aria-label="Interactive briefing sections" class="bg-zinc-950 text-zinc-400 w-full md:w-72 flex-shrink-0 absolute md:relative z-30 h-full transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col border-r border-zinc-900 shadow-2xl md:shadow-none">
+        <button id="mobileMenuClose" type="button" aria-label="Close briefing navigation" class="md:hidden absolute top-4 right-4 p-2 text-zinc-300 hover:text-white transition-colors z-40">
+            <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
         <div class="p-8 hidden md:flex flex-col items-center border-b border-zinc-900/50">
             <div class="text-center w-full">
                 <img src="./pirate-chef-final-trans-color-rgb-hr.png" alt="Pirate Chef Logo" class="h-16 w-auto object-contain mx-auto mb-4" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
@@ -95,7 +171,7 @@
             
             <ul class="space-y-2">
                 <li>
-                    <button onclick="switchTab('bridge')" id="nav-bridge" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-sm bg-zinc-900 text-zinc-100 border-l-4 border-pink-500 transition-all text-left">
+                    <button onclick="switchTab('bridge')" id="nav-bridge" aria-current="step" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-sm bg-zinc-900 text-zinc-100 border-l-4 border-pink-500 transition-all text-left">
                         <i data-lucide="map" class="w-5 h-5"></i>
                         <div class="flex flex-col">
                             <span class="font-bold text-sm">1. The Bridge</span>
@@ -154,7 +230,7 @@
     </nav>
 
     <!-- Main Content Area -->
-    <main class="flex-grow overflow-y-auto relative h-full bg-zinc-50/50" id="main-content">
+    <main class="flex-grow overflow-y-auto relative h-full bg-zinc-50/50" id="main-content" tabindex="-1">
         <div class="max-w-5xl mx-auto p-4 md:p-10 pb-32">
             
             <!-- SECTION 1: THE BRIDGE -->
@@ -188,7 +264,7 @@
                                 <h5 class="text-white font-bold text-sm">7-Min Visual Overview</h5>
                             </div>
                             <p class="text-zinc-500 text-xs">Best for big-picture thinking and visual mapping.</p>
-                            <video controls class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
+                            <video controls preload="metadata" class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
                                 <source src="./North Star Commissary - Bankable CoWorking Model.mp4" type="video/mp4">
                                 Your browser does not support the video element.
                             </video>
@@ -202,7 +278,7 @@
                             </div>
                             <p class="text-zinc-500 text-xs">Best for deeper context and foundational education.</p>
                             <div class="mt-auto pt-4">
-                                <audio controls class="w-full outline-none rounded-sm">
+                                <audio controls preload="metadata" class="w-full outline-none rounded-sm">
                                     <source src="./North Star Commissary - Bankable CoWorking Model.mp3" type="audio/mpeg">
                                     Your browser does not support the audio element.
                                 </audio>
@@ -324,7 +400,7 @@
                                 <h5 class="text-white font-bold text-sm">7-Min Visual Overview</h5>
                             </div>
                             <p class="text-zinc-500 text-xs">Best for big-picture thinking and visual mapping.</p>
-                            <video controls class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
+                            <video controls preload="metadata" class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
                                 <source src="./North Star Commissary - Food Coworking Model.mp4" type="video/mp4">
                                 Your browser does not support the video element.
                             </video>
@@ -338,7 +414,7 @@
                             </div>
                             <p class="text-zinc-500 text-xs">Best for deeper context and foundational education.</p>
                             <div class="mt-auto pt-4">
-                                <audio controls class="w-full outline-none rounded-sm">
+                                <audio controls preload="metadata" class="w-full outline-none rounded-sm">
                                     <source src="./North Star Commissary - Food Coworking Model.mp3" type="audio/mpeg">
                                     Your browser does not support the audio element.
                                 </audio>
@@ -466,7 +542,7 @@
                                 <h5 class="text-white font-bold text-sm">7-Min Visual Overview</h5>
                             </div>
                             <p class="text-zinc-500 text-xs">Best for big-picture thinking and visual mapping.</p>
-                            <video controls class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
+                            <video controls preload="metadata" class="w-full aspect-video rounded-sm bg-black shadow-inner border border-zinc-800 mt-2">
                                 <source src="./Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp4" type="video/mp4">
                                 Your browser does not support the video element.
                             </video>
@@ -480,7 +556,7 @@
                             </div>
                             <p class="text-zinc-500 text-xs">Best for deeper context and foundational education.</p>
                             <div class="mt-auto pt-4">
-                                <audio controls class="w-full outline-none rounded-sm">
+                                <audio controls preload="metadata" class="w-full outline-none rounded-sm">
                                     <source src="./Monetizing_a_Commercial_Kitchen_Coworking_Blueprint.mp3" type="audio/mpeg">
                                     Your browser does not support the audio element.
                                 </audio>
@@ -550,7 +626,8 @@
                     </div>
                     
                     <div class="chart-container chart-container-large relative z-10">
-                        <canvas id="revenueChart"></canvas>
+                        <canvas id="revenueChart" role="img" aria-label="Six-month revenue capacity scenario chart" aria-describedby="chart-status"></canvas>
+                        <div id="chart-status" class="sr-status" role="status" aria-live="polite">Revenue scenario: Lean Base only.</div>
                     </div>
                 </div>
 
@@ -598,7 +675,7 @@
                                 <span>6 Months (Base)</span>
                                 <span>9 Months</span>
                             </div>
-                            <input type="range" id="delay-slider" min="3" max="9" value="6" step="1">
+                            <input type="range" id="delay-slider" min="3" max="9" value="6" step="1" aria-label="Pre-Opening Timeline in months" aria-describedby="months-readout burn-readout" aria-valuetext="6 months, total cash burn $28,002">
                             <div class="text-center mt-6">
                                 <span class="bg-zinc-800 text-zinc-300 px-4 py-2 rounded-full text-sm font-bold border border-zinc-700">
                                     Pre-Opening Timeline: <span id="months-readout" class="text-white">6 Months</span>
@@ -645,29 +722,29 @@
                     <div class="flex flex-col items-center gap-3">
                         <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Priority Hierarchy</div>
                         
-                        <div class="funnel-layer w-full bg-pink-500 text-white p-4 text-center shadow-md border-b-4 border-pink-700" onclick="showFunnelData('critical')">
+                        <button type="button" class="funnel-layer w-full bg-pink-500 text-white p-4 text-center shadow-md border-b-4 border-pink-700" data-funnel-key="critical" aria-pressed="false" aria-controls="funnel-results" onclick="showFunnelData('critical')">
                             <h4 class="font-brand text-lg">1. Critical Path</h4>
                             <p class="text-xs opacity-90">MEP & Base Lease</p>
-                        </div>
+                        </button>
                         
-                        <div class="funnel-layer w-11/12 bg-amber-500 text-white p-4 text-center shadow-md border-b-4 border-amber-700" onclick="showFunnelData('operations')">
+                        <button type="button" class="funnel-layer w-11/12 bg-amber-500 text-white p-4 text-center shadow-md border-b-4 border-amber-700" data-funnel-key="operations" aria-pressed="false" aria-controls="funnel-results" onclick="showFunnelData('operations')">
                             <h4 class="font-brand text-lg">2. Base Operations</h4>
                             <p class="text-xs opacity-90">Zoning & Launch Scope</p>
-                        </div>
+                        </button>
                         
-                        <div class="funnel-layer w-4/5 bg-zinc-700 text-white p-4 text-center shadow-md border-b-4 border-zinc-900" onclick="showFunnelData('upside')">
+                        <button type="button" class="funnel-layer w-4/5 bg-zinc-700 text-white p-4 text-center shadow-md border-b-4 border-zinc-900" data-funnel-key="upside" aria-pressed="false" aria-controls="funnel-results" onclick="showFunnelData('upside')">
                             <h4 class="font-brand text-lg">3. Upside Validation</h4>
                             <p class="text-xs opacity-90">Food Trucks & Retail</p>
-                        </div>
+                        </button>
 
-                        <div class="funnel-layer w-3/5 bg-zinc-900 text-white p-4 text-center shadow-md" onclick="showFunnelData('funding')">
+                        <button type="button" class="funnel-layer w-3/5 bg-zinc-900 text-white p-4 text-center shadow-md" data-funnel-key="funding" aria-pressed="false" aria-controls="funnel-results" onclick="showFunnelData('funding')">
                             <h4 class="font-brand text-lg">4. Funding Stack</h4>
                             <p class="text-xs opacity-90">Sources & Reserves</p>
-                        </div>
+                        </button>
                     </div>
 
                     <!-- Dynamic Data Table -->
-                    <div class="bg-white border border-zinc-200 shadow-md p-6 h-[380px] flex flex-col">
+                    <div id="funnel-results" role="region" aria-labelledby="funnel-title" class="bg-white border border-zinc-200 shadow-md p-6 h-[380px] flex flex-col">
                         <div class="border-b border-zinc-200 pb-3 mb-4 flex justify-between items-end">
                             <h3 class="font-brand text-xl text-zinc-900" id="funnel-title">Select a Layer</h3>
                             <span class="text-xs font-bold text-pink-500 bg-pink-50 px-2 py-1 rounded-sm" id="funnel-count">-- Items</span>
@@ -677,6 +754,7 @@
                             <ul id="funnel-list" class="space-y-4">
                                 <li class="text-sm text-zinc-500 italic text-center mt-20">Click a colored layer in the funnel to view the specific validation requirements and owners.</li>
                             </ul>
+                            <div id="funnel-status" class="sr-status" role="status" aria-live="polite"></div>
                         </div>
                     </div>
                 </div>
@@ -783,6 +861,71 @@
         // Initialize Lucide Icons
         lucide.createIcons();
 
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenuClose = document.getElementById('mobileMenuClose');
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const skipLink = document.getElementById('skip-link');
+        const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        let menuReturnTarget = mobileMenuBtn;
+
+        function isMobileViewport() {
+            return window.innerWidth < 768;
+        }
+
+        function getDrawerFocusable() {
+            return Array.from(sidebar.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'))
+                .filter(el => !el.hasAttribute('hidden'));
+        }
+
+        function syncDrawerAccessibility() {
+            const open = isMobileViewport() && !sidebar.classList.contains('-translate-x-full');
+            mobileMenuBtn.setAttribute('aria-expanded', String(open));
+            mobileMenuBtn.setAttribute('aria-label', open ? 'Close briefing navigation' : 'Open briefing navigation');
+            if (isMobileViewport()) {
+                sidebar.setAttribute('aria-hidden', String(!open));
+                mainContent.inert = open;
+            } else {
+                sidebar.removeAttribute('aria-hidden');
+                mainContent.inert = false;
+                mobileMenuBtn.setAttribute('aria-expanded', 'false');
+                mobileMenuBtn.setAttribute('aria-label', 'Open briefing navigation');
+            }
+        }
+
+        function openMobileMenu() {
+            if (!isMobileViewport()) return;
+            menuReturnTarget = document.activeElement instanceof HTMLElement ? document.activeElement : mobileMenuBtn;
+            sidebar.classList.remove('-translate-x-full');
+            syncDrawerAccessibility();
+            requestAnimationFrame(() => mobileMenuClose.focus());
+        }
+
+        function getSectionFocusTarget(tabId) {
+            const section = document.getElementById('tab-' + tabId);
+            const target = section.querySelector('h2, h3');
+            if (!target) return null;
+            target.setAttribute('tabindex', '-1');
+            target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
+            return target;
+        }
+
+        function closeMobileMenu({ returnFocus = true, focusTarget = null } = {}) {
+            if (!isMobileViewport()) return;
+            sidebar.classList.add('-translate-x-full');
+            mainContent.inert = false;
+            const target = focusTarget || (returnFocus ? menuReturnTarget : null);
+            if (target instanceof HTMLElement) {
+                target.focus({ preventScroll: true });
+            }
+            syncDrawerAccessibility();
+        }
+
+        function focusSection(tabId) {
+            const target = getSectionFocusTarget(tabId);
+            if (target) target.focus({ preventScroll: true });
+        }
+
         // --- Navigation Logic ---
         function switchTab(tabId) {
             // Stop all video and audio players when switching tabs to prevent overlap
@@ -791,31 +934,139 @@
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.add('hide');
             });
-            
+
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.classList.remove('bg-zinc-900', 'text-zinc-100', 'border-pink-500');
                 btn.classList.add('hover:bg-zinc-900', 'hover:text-zinc-200', 'border-transparent');
+                btn.removeAttribute('aria-current');
             });
 
             document.getElementById('tab-' + tabId).classList.remove('hide');
-            
+
             const activeBtn = document.getElementById('nav-' + tabId);
             activeBtn.classList.remove('hover:bg-zinc-900', 'hover:text-zinc-200', 'border-transparent');
             activeBtn.classList.add('bg-zinc-900', 'text-zinc-100', 'border-pink-500');
+            activeBtn.setAttribute('aria-current', 'step');
 
-            if (window.innerWidth < 768) {
-                document.getElementById('sidebar').classList.add('-translate-x-full');
+            if (isMobileViewport()) {
+                closeMobileMenu({ returnFocus: false, focusTarget: getSectionFocusTarget(tabId) });
+            } else {
+                requestAnimationFrame(() => focusSection(tabId));
             }
 
-            document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' });
+            mainContent.scrollTo({ top: 0, behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' });
 
             if (tabId === 'financials') {
                 initRevenueChart();
             }
         }
 
-        document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        mobileMenuBtn.addEventListener('click', () => {
+            if (sidebar.classList.contains('-translate-x-full')) {
+                openMobileMenu();
+            } else {
+                closeMobileMenu();
+            }
+        });
+        mobileMenuClose.addEventListener('click', () => closeMobileMenu());
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                const openDisclosure = document.querySelector('.blueprint-zone.is-open, .source-badge.is-open');
+                if (openDisclosure) {
+                    openDisclosure.classList.remove('is-open');
+                    openDisclosure.setAttribute('aria-expanded', 'false');
+                    openDisclosure.focus();
+                    event.preventDefault();
+                    return;
+                }
+                if (isMobileViewport() && !sidebar.classList.contains('-translate-x-full')) {
+                    closeMobileMenu();
+                    event.preventDefault();
+                }
+            }
+
+            if (event.key === 'Tab' && isMobileViewport() && !sidebar.classList.contains('-translate-x-full')) {
+                const focusable = getDrawerFocusable();
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+
+        window.addEventListener('resize', syncDrawerAccessibility);
+        syncDrawerAccessibility();
+
+        skipLink.addEventListener('click', () => {
+            requestAnimationFrame(() => mainContent.focus({ preventScroll: true }));
+        });
+
+        // --- Input-modality-aware disclosures ---
+        document.querySelectorAll('.blueprint-zone').forEach((zone, index) => {
+            const label = zone.querySelector('h3')?.textContent.trim() || `Blueprint zone ${index + 1}`;
+            zone.setAttribute('role', 'button');
+            zone.setAttribute('tabindex', '0');
+            zone.setAttribute('aria-expanded', 'false');
+            zone.setAttribute('aria-label', `${label}. Activate to reveal operational details.`);
+
+            const toggle = () => {
+                const willOpen = !zone.classList.contains('is-open');
+                document.querySelectorAll('.blueprint-zone.is-open').forEach(other => {
+                    if (other !== zone) {
+                        other.classList.remove('is-open');
+                        other.setAttribute('aria-expanded', 'false');
+                    }
+                });
+                zone.classList.toggle('is-open', willOpen);
+                zone.setAttribute('aria-expanded', String(willOpen));
+            };
+
+            zone.addEventListener('click', toggle);
+            zone.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggle();
+                }
+            });
+        });
+
+        document.querySelectorAll('.source-badge').forEach((badge, index) => {
+            const tooltip = badge.querySelector('.source-tooltip');
+            if (!tooltip) return;
+            const tooltipId = `source-tooltip-${index + 1}`;
+            tooltip.id = tooltipId;
+            badge.setAttribute('role', 'button');
+            badge.setAttribute('tabindex', '0');
+            badge.setAttribute('aria-expanded', 'false');
+            badge.setAttribute('aria-controls', tooltipId);
+            badge.setAttribute('aria-label', 'Source Intel. Activate to reveal reference details.');
+
+            const toggle = () => {
+                const willOpen = !badge.classList.contains('is-open');
+                document.querySelectorAll('.source-badge.is-open').forEach(other => {
+                    if (other !== badge) {
+                        other.classList.remove('is-open');
+                        other.setAttribute('aria-expanded', 'false');
+                    }
+                });
+                badge.classList.toggle('is-open', willOpen);
+                badge.setAttribute('aria-expanded', String(willOpen));
+            };
+
+            badge.addEventListener('click', toggle);
+            badge.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggle();
+                }
+            });
         });
 
         // --- Interactive Chart.js Logic ---
@@ -844,6 +1095,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: reducedMotionQuery.matches ? false : undefined,
                     scales: {
                         y: {
                             stacked: true, beginAtZero: true, grid: { color: '#f4f4f5' }, border: { display: false },
@@ -873,10 +1125,11 @@
             const toggleLogistics = document.getElementById('toggle-logistics');
             const bgLogistics = document.getElementById('bg-logistics');
             const dotLogistics = document.getElementById('dot-logistics');
-            
+
             const toggleBrand = document.getElementById('toggle-brand');
             const bgBrand = document.getElementById('bg-brand');
             const dotBrand = document.getElementById('dot-brand');
+            const chartStatus = document.getElementById('chart-status');
 
             function updateChart() {
                 if (toggleLogistics.checked) {
@@ -898,7 +1151,12 @@
                     bgBrand.style.backgroundColor = '#e4e4e7';
                     dotBrand.classList.remove('translate-x-4');
                 }
-                revChartInstance.update();
+                revChartInstance.update(reducedMotionQuery.matches ? 'none' : undefined);
+
+                const enabled = ['Lean Base'];
+                if (toggleLogistics.checked) enabled.push('Logistics Upside');
+                if (toggleBrand.checked) enabled.push('Brand Upside');
+                chartStatus.textContent = `Revenue scenario updated: ${enabled.join(', ')}.`;
             }
 
             toggleLogistics.addEventListener('change', updateChart);
@@ -915,9 +1173,11 @@
         slider.addEventListener('input', function() {
             const months = parseInt(this.value);
             const totalBurn = months * baseRent;
-            
+            const formattedBurn = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalBurn);
+
             monthsReadout.innerText = months + " Months";
-            burnReadout.innerText = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalBurn);
+            burnReadout.innerText = formattedBurn;
+            this.setAttribute('aria-valuetext', `${months} months, total cash burn ${formattedBurn}`);
 
             if (months > 6) {
                 burnReadout.classList.replace('text-white', 'text-pink-400');
@@ -971,14 +1231,18 @@
             const data = funnelData[layerKey];
             document.getElementById('funnel-title').innerText = data.title;
             document.getElementById('funnel-count').innerText = data.count;
-            
+
+            document.querySelectorAll('[data-funnel-key]').forEach(layer => {
+                layer.setAttribute('aria-pressed', String(layer.dataset.funnelKey === layerKey));
+            });
+
             const list = document.getElementById('funnel-list');
             list.innerHTML = '';
-            
+
             data.items.forEach(item => {
                 const li = document.createElement('li');
                 li.className = "p-3 bg-zinc-50 border border-zinc-100 rounded-sm fade-in";
-                
+
                 let ownerClass = "bg-zinc-200 text-zinc-600";
                 if(item.owner.includes("Ian")) ownerClass = "bg-pink-100 text-pink-700";
                 if(item.owner.includes("Contractor")) ownerClass = "bg-amber-100 text-amber-700";
@@ -991,6 +1255,8 @@
                 `;
                 list.appendChild(li);
             });
+
+            document.getElementById('funnel-status').textContent = `${data.title}. ${data.count} shown.`;
         }
     </script>
 </body>
