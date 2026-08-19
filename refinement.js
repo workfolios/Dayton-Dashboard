@@ -244,7 +244,7 @@
       const burn = burnReadout?.textContent.trim() || '';
       slider.setAttribute('aria-valuetext', `${months} months, total cash burn ${burn}`);
     };
-    slider.addEventListener('input', () => requestAnimationFrame(syncSliderValue));
+    slider.addEventListener('input', syncSliderValue);
     syncSliderValue();
   }
 })();
