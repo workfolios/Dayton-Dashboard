@@ -25,6 +25,8 @@ https://workfolios.github.io/Dayton-Dashboard/
 
 Before release, verify representative desktop, tablet, and mobile widths; keyboard/focus behavior; touch-equivalent disclosures; reduced motion; media playback/lifecycle; chart and sensitivity interactions; validation funnel state; horizontal overflow; console/network errors; and the final public GitHub Pages URL.
 
+The refined runtime package was validated in Chromium, Firefox, and WebKit before release. Temporary QA workflows and implementation scripts are not part of the production repository.
+
 ## Deployment
 
 Production is served from the repository's authorized GitHub Pages configuration. Record the pre-change commit before release and verify the actual public URL after publication; merge/build status alone is not live verification.
