@@ -22,7 +22,7 @@ jobs:
 
       - name: Verify live boundaries and orientations
         run: |
-          cat > /tmp/boundary.mjs <<'JS'
+          cat > boundary.mjs <<'JS'
           import { chromium, webkit } from 'playwright';
           import assert from 'node:assert/strict';
 
@@ -49,12 +49,9 @@ jobs:
               await page.waitForTimeout(600);
               const state = await page.evaluate(() => {
                 const header = document.querySelector('body > div.md\\:hidden');
-                const sidebar = document.getElementById('sidebar');
                 const main = document.getElementById('main-content');
                 return {
                   headerDisplay: header ? getComputedStyle(header).display : null,
-                  sidebarTransform: sidebar ? getComputedStyle(sidebar).transform : null,
-                  sidebarDisplay: sidebar ? getComputedStyle(sidebar).display : null,
                   rootOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
                   bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
                   mainClientWidth: main?.clientWidth || 0,
@@ -80,4 +77,4 @@ jobs:
             }
           }
           JS
-          HOME=/root node /tmp/boundary.mjs
+          HOME=/root node boundary.mjs
