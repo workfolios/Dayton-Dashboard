@@ -1,0 +1,67 @@
+name: Dayton Phase 2 SEO Validation
+
+on:
+  push:
+    branches:
+      - agent/dayton-seo-2026-08-20
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  seo-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe current production SEO contract
+        run: |
+          python - <<'PY'
+          import json, re, urllib.request, urllib.error
+          from html import unescape
+
+          base = 'https://workfolios.github.io/Dayton-Dashboard/'
+          req = urllib.request.Request(base, headers={'User-Agent':'Dayton-SEO-Validation/1.0'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              html = r.read().decode('utf-8', 'replace')
+              status = r.status
+
+          def one(pattern):
+              m = re.search(pattern, html, re.I | re.S)
+              return unescape(m.group(1).strip()) if m else None
+
+          def count(pattern):
+              return len(re.findall(pattern, html, re.I | re.S))
+
+          result = {
+              'http_status': status,
+              'title': one(r'<title>(.*?)</title>'),
+              'description': one(r'<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']'),
+              'canonical': one(r'<link\s+rel=["\']canonical["\']\s+href=["\'](.*?)["\']'),
+              'robots': one(r'<meta\s+name=["\']robots["\']\s+content=["\'](.*?)["\']'),
+              'og_title': one(r'<meta\s+property=["\']og:title["\']\s+content=["\'](.*?)["\']'),
+              'og_description': one(r'<meta\s+property=["\']og:description["\']\s+content=["\'](.*?)["\']'),
+              'og_url': one(r'<meta\s+property=["\']og:url["\']\s+content=["\'](.*?)["\']'),
+              'og_image': one(r'<meta\s+property=["\']og:image["\']\s+content=["\'](.*?)["\']'),
+              'twitter_card': one(r'<meta\s+name=["\']twitter:card["\']\s+content=["\'](.*?)["\']'),
+              'twitter_title': one(r'<meta\s+name=["\']twitter:title["\']\s+content=["\'](.*?)["\']'),
+              'twitter_description': one(r'<meta\s+name=["\']twitter:description["\']\s+content=["\'](.*?)["\']'),
+              'twitter_image': one(r'<meta\s+name=["\']twitter:image["\']\s+content=["\'](.*?)["\']'),
+              'jsonld_blocks': count(r'<script\s+type=["\']application/ld\+json["\']'),
+          }
+
+          for path in ('sitemap.xml', 'robots.txt'):
+              try:
+                  with urllib.request.urlopen(base + path, timeout=20) as r:
+                      result[path] = r.status
+              except urllib.error.HTTPError as e:
+                  result[path] = e.code
+              except Exception as e:
+                  result[path] = type(e).__name__
+
+          print(json.dumps(result, indent=2))
+          assert status == 200
+          assert result['canonical'] == base
+          PY
