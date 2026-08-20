@@ -9,59 +9,155 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  seo-baseline:
+  apply-seo:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe current production SEO contract
+      - name: Checkout SEO branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Apply bounded SEO metadata contract
         run: |
           python - <<'PY'
-          import json, re, urllib.request, urllib.error
-          from html import unescape
+          from pathlib import Path
 
-          base = 'https://workfolios.github.io/Dayton-Dashboard/'
-          req = urllib.request.Request(base, headers={'User-Agent':'Dayton-SEO-Validation/1.0'})
-          with urllib.request.urlopen(req, timeout=30) as r:
-              html = r.read().decode('utf-8', 'replace')
-              status = r.status
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          before_body = text.split('</head>', 1)[1]
 
-          def one(pattern):
-              m = re.search(pattern, html, re.I | re.S)
-              return unescape(m.group(1).strip()) if m else None
+          old = '''    <meta name="description" content="Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.">
+    <link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">
+    <meta property="og:description" content="Interactive business-plan assessment dashboard for the Dayton 2.0 operating model, financial assumptions, validation priorities, and funding roadmap.">
+    <meta property="og:url" content="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta name="twitter:card" content="summary">'''
 
-          def count(pattern):
-              return len(re.findall(pattern, html, re.I | re.S))
+          new = '''    <meta name="description" content="Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.">
+    <meta name="robots" content="index,follow">
+    <link rel="canonical" href="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">
+    <meta property="og:description" content="Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.">
+    <meta property="og:url" content="https://workfolios.github.io/Dayton-Dashboard/">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">
+    <meta name="twitter:description" content="Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.">'''
 
-          result = {
-              'http_status': status,
-              'title': one(r'<title>(.*?)</title>'),
-              'description': one(r'<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']'),
-              'canonical': one(r'<link\s+rel=["\']canonical["\']\s+href=["\'](.*?)["\']'),
-              'robots': one(r'<meta\s+name=["\']robots["\']\s+content=["\'](.*?)["\']'),
-              'og_title': one(r'<meta\s+property=["\']og:title["\']\s+content=["\'](.*?)["\']'),
-              'og_description': one(r'<meta\s+property=["\']og:description["\']\s+content=["\'](.*?)["\']'),
-              'og_url': one(r'<meta\s+property=["\']og:url["\']\s+content=["\'](.*?)["\']'),
-              'og_image': one(r'<meta\s+property=["\']og:image["\']\s+content=["\'](.*?)["\']'),
-              'twitter_card': one(r'<meta\s+name=["\']twitter:card["\']\s+content=["\'](.*?)["\']'),
-              'twitter_title': one(r'<meta\s+name=["\']twitter:title["\']\s+content=["\'](.*?)["\']'),
-              'twitter_description': one(r'<meta\s+name=["\']twitter:description["\']\s+content=["\'](.*?)["\']'),
-              'twitter_image': one(r'<meta\s+name=["\']twitter:image["\']\s+content=["\'](.*?)["\']'),
-              'jsonld_blocks': count(r'<script\s+type=["\']application/ld\+json["\']'),
+          if old in text:
+              assert text.count(old) == 1
+              text = text.replace(old, new, 1)
+          else:
+              required = [
+                  '<meta name="robots" content="index,follow">',
+                  '<meta name="twitter:title" content="Dayton 2.0 Assessment Dashboard | Pirate Chef">',
+                  '<meta name="twitter:description" content="Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.">',
+              ]
+              assert all(item in text for item in required), 'SEO metadata block is neither baseline nor intended final state.'
+
+          after_body = text.split('</head>', 1)[1]
+          assert before_body == after_body, 'Visible/body markup changed during metadata-only SEO implementation.'
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate SEO source contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path('index.html').read_text(encoding='utf-8')
+          title = 'Dayton 2.0 Assessment Dashboard | Pirate Chef'
+          desc = 'Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.'
+          canonical = 'https://workfolios.github.io/Dayton-Dashboard/'
+
+          expectations = [
+              f'<title>{title}</title>',
+              f'<meta name="description" content="{desc}">',
+              '<meta name="robots" content="index,follow">',
+              f'<link rel="canonical" href="{canonical}">',
+              '<meta property="og:type" content="website">',
+              f'<meta property="og:title" content="{title}">',
+              f'<meta property="og:description" content="{desc}">',
+              f'<meta property="og:url" content="{canonical}">',
+              '<meta name="twitter:card" content="summary">',
+              f'<meta name="twitter:title" content="{title}">',
+              f'<meta name="twitter:description" content="{desc}">',
+          ]
+          for item in expectations:
+              assert html.count(item) == 1, item
+
+          assert 'og:image' not in html
+          assert 'twitter:image' not in html
+          assert 'application/ld+json' not in html
+          assert not Path('sitemap.xml').exists()
+          assert not Path('robots.txt').exists()
+          assert len(list(Path('.').glob('*.html'))) == 1
+          assert re.search(r'<html\s+lang="en">', html)
+          print('SEO source contract: PASS')
+          PY
+
+      - name: Commit bounded SEO source change
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No SEO source change required."
+            exit 0
+          fi
+          git config user.name "Workfolio Studio"
+          git config user.email "brian.j.curr@gmail.com"
+          git add -- index.html
+          git commit -m "Coordinate Dayton search and social metadata contract [seo-apply]"
+          git push origin HEAD:agent/dayton-seo-2026-08-20
+
+  validate-seo:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout proposed SEO release
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Validate proposed production SEO artifact
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path('index.html').read_text(encoding='utf-8')
+          title = 'Dayton 2.0 Assessment Dashboard | Pirate Chef'
+          desc = 'Interactive Dayton 2.0 business-plan assessment dashboard for evaluating the operating model, financial assumptions, validation priorities, and funding roadmap.'
+          canonical = 'https://workfolios.github.io/Dayton-Dashboard/'
+
+          checks = {
+              'title': f'<title>{title}</title>',
+              'description': f'<meta name="description" content="{desc}">',
+              'robots': '<meta name="robots" content="index,follow">',
+              'canonical': f'<link rel="canonical" href="{canonical}">',
+              'og_type': '<meta property="og:type" content="website">',
+              'og_title': f'<meta property="og:title" content="{title}">',
+              'og_description': f'<meta property="og:description" content="{desc}">',
+              'og_url': f'<meta property="og:url" content="{canonical}">',
+              'twitter_card': '<meta name="twitter:card" content="summary">',
+              'twitter_title': f'<meta name="twitter:title" content="{title}">',
+              'twitter_description': f'<meta name="twitter:description" content="{desc}">',
           }
+          for name, token in checks.items():
+              assert html.count(token) == 1, name
 
-          for path in ('sitemap.xml', 'robots.txt'):
-              try:
-                  with urllib.request.urlopen(base + path, timeout=20) as r:
-                      result[path] = r.status
-              except urllib.error.HTTPError as e:
-                  result[path] = e.code
-              except Exception as e:
-                  result[path] = type(e).__name__
-
-          print(json.dumps(result, indent=2))
-          assert status == 200
-          assert result['canonical'] == base
+          assert 'og:image' not in html
+          assert 'twitter:image' not in html
+          assert 'application/ld+json' not in html
+          assert not Path('sitemap.xml').exists()
+          assert not Path('robots.txt').exists()
+          assert len(list(Path('.').glob('*.html'))) == 1
+          assert re.search(r'<html\s+lang="en">', html)
+          print('Proposed production SEO artifact: PASS')
           PY
